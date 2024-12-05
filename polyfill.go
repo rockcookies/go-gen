@@ -1,7 +1,6 @@
 package gen
 
 import (
-	"fmt"
 	tmpl "github.com/rockcookies/go-gen/internal/template"
 	"gorm.io/gorm"
 	"reflect"
@@ -43,35 +42,19 @@ func newTmpl() *Tmpl {
 	}
 }
 
-func NewDO(model interface{}) func(db *gorm.DB, tableName string, opts ...DOOption) *DO {
+func NewDO(model interface{}) func(db *gorm.DB, tableName string) *DO {
 	modelType := reflect.TypeOf(model)
 	if modelType.Kind() == reflect.Ptr {
 		modelType = modelType.Elem()
 	}
 
-	return func(db *gorm.DB, tableName string, opts ...DOOption) *DO {
+	return func(db *gorm.DB, tableName string) *DO {
 		d := DO{}
 
-		// Force to copy Statement
-		d.db = db.WithContext(db.Statement.Context)
-
-		config := &DOConfig{}
-		for _, opt := range opts {
-			if opt != nil {
-				if applyErr := opt.Apply(config); applyErr != nil {
-					panic(applyErr)
-				}
-			}
-		}
-
-		d.DOConfig = config
-
+		d.DOConfig = &DOConfig{}
+		d.db = db
 		d.modelType = modelType
-		err := d.db.Statement.Parse(model)
-		if err != nil {
-			panic(fmt.Errorf("Cannot parse model: %+v\n%w", model, err))
-		}
-		d.tableName = d.db.Statement.Schema.Table
+		d.tableName = tableName
 
 		return &d
 	}
