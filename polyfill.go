@@ -42,19 +42,20 @@ func newTmpl() *Tmpl {
 	}
 }
 
-func NewDO(model interface{}) func(db *gorm.DB, tableName string) *DO {
+func NewDO(model interface{}) func(db *gorm.DB, tableName string, alias string) *DO {
 	modelType := reflect.TypeOf(model)
 	if modelType.Kind() == reflect.Ptr {
 		modelType = modelType.Elem()
 	}
 
-	return func(db *gorm.DB, tableName string) *DO {
+	return func(db *gorm.DB, tableName string, alias string) *DO {
 		d := DO{}
 
 		d.DOConfig = &DOConfig{}
 		d.db = db
 		d.modelType = modelType
 		d.tableName = tableName
+		d.alias = alias
 
 		return &d
 	}
