@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -58,6 +57,8 @@ func NewGenerator(cfg Config) *Generator {
 		Tmpl:   newTmpl(),
 		Data:   make(map[string]*genInfo),
 		models: make(map[string]*generate.QueryStructMeta),
+
+		logger: log.Default(),
 	}
 }
 
@@ -85,13 +86,24 @@ func (i *genInfo) methodInGenInfo(m *generate.InterfaceMethod) bool {
 	return false
 }
 
+// Logger  gen logger interface
+type Logger interface {
+	Println(v ...any)
+}
+
 // Generator code generator
 type Generator struct {
 	Config
-	Tmpl *Tmpl
-
+	Tmpl   *Tmpl
 	Data   map[string]*genInfo                  //gen query data
 	models map[string]*generate.QueryStructMeta //gen model data
+
+	logger Logger
+}
+
+// SetLogger  set gen logger
+func (g *Generator) SetLogger(logger Logger) {
+	g.logger = logger
 }
 
 // UseDB set db connection
@@ -280,7 +292,7 @@ func (g *Generator) Execute() {
 func (g *Generator) info(logInfos ...string) {
 	for _, l := range logInfos {
 		g.db.Logger.Info(context.Background(), l)
-		log.Println(l)
+		g.logger.Println(l)
 	}
 }
 
@@ -568,7 +580,7 @@ func (g *Generator) output(fileName string, content []byte) error {
 		}
 		return fmt.Errorf("cannot format file: %w", err)
 	}
-	return ioutil.WriteFile(fileName, result, 0640)
+	return os.WriteFile(fileName, result, 0640)
 }
 
 func (g *Generator) pushQueryStructMeta(meta *generate.QueryStructMeta) (*genInfo, error) {

@@ -3,8 +3,8 @@ package gen
 import (
 	"fmt"
 
-	"gorm.io/datatypes"
 	"github.com/rockcookies/go-gen/field"
+	"gorm.io/datatypes"
 	"gorm.io/gorm/clause"
 )
 
