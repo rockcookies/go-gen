@@ -3,6 +3,7 @@ package gen
 import (
 	tmpl "github.com/rockcookies/go-gen/internal/template"
 	"gorm.io/gorm"
+	"reflect"
 )
 
 type Tmpl struct {
@@ -41,6 +42,18 @@ func newTmpl() *Tmpl {
 	}
 }
 
-func (d *DO) UseDBRaw(db *gorm.DB) {
+func (d *DO) UnsafeSetDB(db *gorm.DB) {
 	d.db = db
+}
+
+func (d *DO) UnsafeSetAlias(alias string) {
+	d.alias = alias
+}
+
+func (d *DO) UnsafeSetModelType(modelType reflect.Type) {
+	d.modelType = modelType
+}
+
+func (d *DO) UnsafeSetTableName(tableName string) {
+	d.tableName = tableName
 }
