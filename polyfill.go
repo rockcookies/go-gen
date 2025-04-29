@@ -2,6 +2,7 @@ package gen
 
 import (
 	tmpl "github.com/rockcookies/go-gen/internal/template"
+	"gorm.io/gorm"
 )
 
 type Tmpl struct {
@@ -38,4 +39,8 @@ func newTmpl() *Tmpl {
 		TableQueryStructWithContext: tmpl.TableQueryStructWithContext,
 		TableQueryIface:             tmpl.TableQueryIface,
 	}
+}
+
+func (d *DO) UseDBRaw(db *gorm.DB) {
+	d.db = db
 }
