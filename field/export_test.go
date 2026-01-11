@@ -18,6 +18,7 @@ func (p *password) Scan(src interface{}) error {
 	*p = password(fmt.Sprintf("this is password {%q}", src))
 	return nil
 }
+
 func (p password) Value() (driver.Value, error) {
 	return strings.TrimPrefix(strings.TrimSuffix(string(p), "}"), "this is password {"), nil
 }
@@ -514,7 +515,7 @@ func BenchmarkExpr_Count(b *testing.B) {
 }
 
 func TestRelation_StructField(t *testing.T) {
-	var testdatas = []struct {
+	testdatas := []struct {
 		relation      *field.Relation
 		expectedValue string
 	}{
@@ -541,7 +542,7 @@ func TestRelation_StructField(t *testing.T) {
 }
 
 func TestRelation_StructFieldInit(t *testing.T) {
-	var testdatas = []struct {
+	testdatas := []struct {
 		relation      *field.Relation
 		expectedValue string
 	}{

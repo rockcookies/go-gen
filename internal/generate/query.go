@@ -40,6 +40,8 @@ type QueryStructMeta struct {
 	ModelMethods    []*parser.Method // user custom method bind to db base struct
 
 	interfaceMode bool
+
+	UseGenericMode bool // use generic mode
 }
 
 // parseStruct get all elements of struct with gorm's Parse, ignore unexported elements
@@ -209,6 +211,7 @@ func (b *QueryStructMeta) ReviseDIYMethod() error {
 	}
 	return nil
 }
+
 func (b *QueryStructMeta) pasreTableName(method *parser.Method) {
 	if method == nil || method.Body == "" || !strings.Contains(method.Body, "@@table") {
 		return
@@ -217,8 +220,8 @@ func (b *QueryStructMeta) pasreTableName(method *parser.Method) {
 	method.Body = strings.ReplaceAll(method.Body, "\"@@table\"", "TableName"+b.ModelStructName)
 	// e.g. return "t_@@table" => return "t_user"
 	method.Body = strings.ReplaceAll(method.Body, "@@table", b.TableName)
-
 }
+
 func (b *QueryStructMeta) addMethodFromAddMethodOpt(methods ...interface{}) *QueryStructMeta {
 	for _, method := range methods {
 		modelMethods, err := parser.GetModelMethod(method)
@@ -241,6 +244,12 @@ func (b QueryStructMeta) IfaceMode(on bool) *QueryStructMeta {
 	return &b
 }
 
+// GenericMode object mode
+func (b QueryStructMeta) GenericMode(on bool) *QueryStructMeta {
+	b.UseGenericMode = on
+	return &b
+}
+
 // ReturnObject return object in generated code
 func (b *QueryStructMeta) ReturnObject() string {
 	if b.interfaceMode {
@@ -254,25 +263,32 @@ func isStructType(data reflect.Value) bool {
 		(data.Kind() == reflect.Ptr && data.Elem().Kind() == reflect.Struct)
 }
 
-func pullRelationShip(cache map[string]bool, relationships []*schema.Relationship) []field.Relation {
+func pullRelationShip(cache map[string][]field.Relation, relationships []*schema.Relationship) []field.Relation {
 	if len(relationships) == 0 {
 		return nil
 	}
 	result := make([]field.Relation, len(relationships))
-	for i, relationship := range relationships {
-		var childRelations []field.Relation
+
+	for _, relationship := range relationships {
 		varType := strings.TrimLeft(relationship.Field.FieldType.String(), "[]*")
-		if !cache[varType] {
-			cache[varType] = true
-			childRelations = pullRelationShip(cache, append(append(append(append(
+		_, ok := cache[varType]
+		if !ok {
+			cache[varType] = []field.Relation{}
+			childRelations := pullRelationShip(cache, append(append(append(append(
 				make([]*schema.Relationship, 0, 4),
 				relationship.FieldSchema.Relationships.BelongsTo...),
 				relationship.FieldSchema.Relationships.HasOne...),
 				relationship.FieldSchema.Relationships.HasMany...),
 				relationship.FieldSchema.Relationships.Many2Many...),
 			)
+			cache[varType] = childRelations
 		}
-		result[i] = *field.NewRelationWithType(field.RelationshipType(relationship.Type), relationship.Name, varType, childRelations...)
+	}
+
+	for i, relationship := range relationships {
+		varType := strings.TrimLeft(relationship.Field.FieldType.String(), "[]*")
+		cached := cache[varType]
+		result[i] = *field.NewRelationWithType(field.RelationshipType(relationship.Type), relationship.Name, varType, cached...)
 	}
 	return result
 }

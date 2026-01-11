@@ -54,7 +54,6 @@ func NewGenerator(cfg Config) *Generator {
 
 	return &Generator{
 		Config: cfg,
-		Tmpl:   newTmpl(),
 		Data:   make(map[string]*genInfo),
 		models: make(map[string]*generate.QueryStructMeta),
 
@@ -95,8 +94,8 @@ type Logger interface {
 type Generator struct {
 	Config
 	Tmpl   *Tmpl
-	Data   map[string]*genInfo                  //gen query data
-	models map[string]*generate.QueryStructMeta //gen model data
+	Data   map[string]*genInfo                  // gen query data
+	models map[string]*generate.QueryStructMeta // gen model data
 
 	logger Logger
 }
@@ -225,7 +224,7 @@ func (g *Generator) ApplyBasic(models ...interface{}) {
 	g.ApplyInterface(func() {}, models...)
 }
 
-// ApplyInterface specifies .diy_method interfaces on structures, implment codes will be generated after calling g.Execute()
+// ApplyInterface specifies .diy_method interfaces on structures, implement codes will be generated after calling g.Execute()
 // eg: g.ApplyInterface(func(model.Method){}, model.User{}, model.Company{})
 func (g *Generator) ApplyInterface(fc interface{}, models ...interface{}) {
 	structs, err := generate.ConvertStructs(g.db, models...)
@@ -408,32 +407,49 @@ func (g *Generator) generateSingleQueryFile(data *genInfo) (err error) {
 		return err
 	}
 
-	data.QueryStructMeta = data.QueryStructMeta.IfaceMode(g.judgeMode(WithQueryInterface))
+	data.QueryStructMeta = data.QueryStructMeta.
+		IfaceMode(g.judgeMode(WithQueryInterface) || g.judgeMode(WithGeneric)).
+		GenericMode(g.judgeMode(WithGeneric))
 
 	structTmpl := g.Tmpl.TableQueryStructWithContext
+	crudTmpl := g.Tmpl.CRUDMethod
+	ifaceTmpl := ""
+
+	if g.judgeMode(WithQueryInterface) {
+		ifaceTmpl = g.Tmpl.TableQueryIface
+	}
 	if g.judgeMode(WithoutContext) {
 		structTmpl = g.Tmpl.TableQueryStruct
+	}
+	if g.judgeMode(WithGeneric) {
+		structTmpl += g.Tmpl.DefineGenericsMethodStruct
+		crudTmpl = g.Tmpl.CRUDGenericMethod
+		ifaceTmpl = g.Tmpl.TableGenericQueryIface
+	} else {
+		structTmpl += g.Tmpl.DefineMethodStruct
 	}
 	err = render(structTmpl, &buf, data.QueryStructMeta)
 	if err != nil {
 		return err
 	}
-
-	if g.judgeMode(WithQueryInterface) {
-		err = render(g.Tmpl.TableQueryIface, &buf, data)
-		if err != nil {
-			return err
-		}
+	err = render(ifaceTmpl, &buf, data)
+	if err != nil {
+		return err
 	}
 
 	for _, method := range data.Interfaces {
+		if method.Section == nil || method.Section.IsNull() {
+			// Do not generate method when Section is nil or isNull,
+			// which indicates SkipImpl is true.
+			continue
+		}
 		err = render(g.Tmpl.DIYMethod, &buf, method)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = render(g.Tmpl.CRUDMethod, &buf, data.QueryStructMeta)
+	err = render(crudTmpl, &buf, data.QueryStructMeta)
 	if err != nil {
 		return err
 	}
@@ -580,7 +596,7 @@ func (g *Generator) output(fileName string, content []byte) error {
 		}
 		return fmt.Errorf("cannot format file: %w", err)
 	}
-	return os.WriteFile(fileName, result, 0640)
+	return os.WriteFile(fileName, result, 0o640)
 }
 
 func (g *Generator) pushQueryStructMeta(meta *generate.QueryStructMeta) (*genInfo, error) {
@@ -596,6 +612,9 @@ func (g *Generator) pushQueryStructMeta(meta *generate.QueryStructMeta) (*genInf
 }
 
 func render(tmpl string, wr io.Writer, data interface{}) error {
+	if tmpl == "" {
+		return nil
+	}
 	t, err := template.New(tmpl).Parse(tmpl)
 	if err != nil {
 		return err

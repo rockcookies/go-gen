@@ -27,6 +27,12 @@ var (
 		}
 	}
 
+	FieldFilter = func(opt func(Field) Field) model.FilterFieldOpt {
+		return func(f *model.Field) *model.Field {
+			return opt(f)
+		}
+	}
+
 	// WithDataTypesNullType configures the types of fields to use their datatypes nullable counterparts.
 	/**
 	 *
@@ -187,7 +193,6 @@ var (
 		return func(m *model.Field) *model.Field {
 			if schemaName != nil {
 				m.Tag.Set(field.TagKeyJson, schemaName(m.ColumnName))
-
 			}
 			return m
 		}
@@ -307,12 +312,9 @@ var (
 	}
 )
 
-var (
-	DefaultMethodTableWithNamer = (&defaultModel{}).TableName
-)
+var DefaultMethodTableWithNamer = (&defaultModel{}).TableName
 
-type defaultModel struct {
-}
+type defaultModel struct{}
 
 func (*defaultModel) TableName(namer schema.Namer) string {
 	if namer == nil {

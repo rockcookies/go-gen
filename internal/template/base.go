@@ -9,7 +9,7 @@ const NotEditMark = `
 const Header = NotEditMark + `
 package {{.Package}}
 
-import(	
+import(
 	{{range .ImportPkgPaths}}{{.}}` + "\n" + `{{end}}
 )
 `

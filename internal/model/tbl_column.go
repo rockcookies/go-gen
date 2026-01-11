@@ -73,6 +73,7 @@ func (c *Column) ToField(nullable, coverable, signable bool) *Field {
 		GORMTag:          c.buildGormTag(),
 		Tag:              map[string]string{field.TagKeyJson: c.jsonTagNS(c.Name())},
 		ColumnComment:    comment,
+		Column:           c,
 	}
 }
 
@@ -101,7 +102,7 @@ func (c *Column) buildGormTag() field.GormTag {
 		if idx == nil {
 			continue
 		}
-		if pk, _ := idx.PrimaryKey(); pk { //ignore PrimaryKey
+		if pk, _ := idx.PrimaryKey(); pk { // ignore PrimaryKey
 			continue
 		}
 		if uniq, _ := idx.Unique(); uniq {
@@ -127,6 +128,9 @@ func (c *Column) buildGormTag() field.GormTag {
 func (c *Column) needDefaultTag(defaultTagValue string) bool {
 	if defaultTagValue == "" {
 		return false
+	}
+	if c.ScanType() == nil {
+		return c.Name() != "created_at" && c.Name() != "updated_at" && defaultTagValue != "" && defaultTagValue != "0" && defaultTagValue != "false"
 	}
 	switch c.ScanType().Kind() {
 	case reflect.Bool:

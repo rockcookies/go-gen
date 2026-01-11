@@ -1,14 +1,16 @@
 package gen
 
 import (
+	"reflect"
+
 	tmpl "github.com/rockcookies/go-gen/internal/template"
 	"gorm.io/gorm"
-	"reflect"
 )
 
 type Tmpl struct {
 	Header                      string
 	DIYMethod                   string
+	CRUDGenericMethod           string
 	CRUDMethod                  string
 	CRUDMethodTest              string
 	DIYMethodTestBasic          string
@@ -21,12 +23,16 @@ type Tmpl struct {
 	TableQueryStruct            string
 	TableQueryStructWithContext string
 	TableQueryIface             string
+	TableGenericQueryIface      string
+	DefineGenericsMethodStruct  string
+	DefineMethodStruct          string
 }
 
 func newTmpl() *Tmpl {
 	return &Tmpl{
 		Header:                      tmpl.Header,
 		DIYMethod:                   tmpl.DIYMethod,
+		CRUDGenericMethod:           tmpl.CRUDGenericMethod,
 		CRUDMethod:                  tmpl.CRUDMethod,
 		CRUDMethodTest:              tmpl.CRUDMethodTest,
 		DIYMethodTestBasic:          tmpl.DIYMethodTestBasic,
@@ -39,6 +45,9 @@ func newTmpl() *Tmpl {
 		TableQueryStruct:            tmpl.TableQueryStruct,
 		TableQueryStructWithContext: tmpl.TableQueryStructWithContext,
 		TableQueryIface:             tmpl.TableQueryIface,
+		TableGenericQueryIface:      tmpl.TableGenericQueryIface,
+		DefineGenericsMethodStruct:  tmpl.DefineGenericsMethodStruct,
+		DefineMethodStruct:          tmpl.DefineMethodStruct,
 	}
 }
 

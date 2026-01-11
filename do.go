@@ -43,10 +43,8 @@ func (d DO) getInstance(db *gorm.DB) *DO {
 
 type doOptions func(*gorm.DB) *gorm.DB
 
-var (
-	// Debug use DB in debug mode
-	Debug doOptions = func(db *gorm.DB) *gorm.DB { return db.Debug() }
-)
+// Debug use DB in debug mode
+var Debug doOptions = func(db *gorm.DB) *gorm.DB { return db.Debug() }
 
 // UseDB specify a db connection(*gorm.DB)
 func (d *DO) UseDB(db *gorm.DB, opts ...DOOption) {
@@ -100,7 +98,7 @@ func (d *DO) indirect(value interface{}) reflect.Type {
 // UseTable specify table name
 func (d *DO) UseTable(tableName string) {
 	d.db = d.db.Table(tableName).Session(new(gorm.Session))
-	//d.db.Statement.Schema.Table=tableName
+	// d.db.Statement.Schema.Table=tableName
 	d.tableName = tableName
 }
 
@@ -451,8 +449,8 @@ func (d *DO) Joins(field field.RelationField) Dao {
 	}
 	if joins := field.GetJoins(); len(joins) > 0 {
 		args = append(args, func(db *gorm.DB) *gorm.DB {
-			//from := clause.From{Joins: toClauseJoins(joins...)}
-			//from.Joins = append(from.Joins, toClauseJoins(joins...)...)
+			// from := clause.From{Joins: toClauseJoins(joins...)}
+			// from.Joins = append(from.Joins, toClauseJoins(joins...)...)
 			return db.Clauses(clause.From{Joins: toClauseJoins(joins...)})
 		})
 	}
@@ -671,7 +669,7 @@ func (d *DO) FirstOrCreate() (result interface{}, err error) {
 
 // Update ...
 func (d *DO) Update(column field.Expr, value interface{}) (info ResultInfo, err error) {
-	tx := d.db.Model(d.newResultPointer())
+	tx := d.prepareTx()
 	columnStr := column.BuildColumn(d.db.Statement, field.WithoutQuote).String()
 
 	var result *gorm.DB
@@ -691,8 +689,8 @@ func (d *DO) UpdateSimple(columns ...field.AssignExpr) (info ResultInfo, err err
 	if len(columns) == 0 {
 		return
 	}
-
-	result := d.db.Model(d.newResultPointer()).Clauses(d.assignSet(columns)).Omit("*").Updates(map[string]interface{}{})
+	tx := d.prepareTx()
+	result := tx.Clauses(d.assignSet(columns)).Omit("*").Updates(map[string]interface{}{})
 	return ResultInfo{RowsAffected: result.RowsAffected, Error: result.Error}, result.Error
 }
 
@@ -707,28 +705,23 @@ func (d *DO) Updates(value interface{}) (info ResultInfo, err error) {
 		valTyp = rawTyp
 	}
 
-	tx := d.db.Model(d.newResultPointer())
-	if d.backfillData != nil {
-		tx = tx.Model(d.backfillData)
-	}
+	tx := d.prepareTx()
 	switch {
-	case valTyp != d.modelType: // different type with model
+	case valTyp == d.modelType: // use value mode
 		if d.backfillData == nil {
-			tx = tx.Model(d.newResultPointer())
+			tx = tx.Model(value)
 		}
 	case rawTyp.Kind() == reflect.Ptr: // ignore ptr value
-	default: // for fixing "reflect.Value.Addr of unaddressable value" panic
-		ptr := reflect.New(d.modelType)
-		ptr.Elem().Set(reflect.ValueOf(value))
-		value = ptr.Interface()
+	default:
 	}
+
 	result := tx.Updates(value)
 	return ResultInfo{RowsAffected: result.RowsAffected, Error: result.Error}, result.Error
 }
 
 // UpdateColumn ...
 func (d *DO) UpdateColumn(column field.Expr, value interface{}) (info ResultInfo, err error) {
-	tx := d.db.Model(d.newResultPointer())
+	tx := d.prepareTx()
 	columnStr := column.BuildColumn(d.db.Statement, field.WithoutQuote).String()
 
 	var result *gorm.DB
@@ -748,20 +741,33 @@ func (d *DO) UpdateColumnSimple(columns ...field.AssignExpr) (info ResultInfo, e
 	if len(columns) == 0 {
 		return
 	}
-
-	result := d.db.Model(d.newResultPointer()).Clauses(d.assignSet(columns)).Omit("*").UpdateColumns(map[string]interface{}{})
+	tx := d.prepareTx()
+	result := tx.Clauses(d.assignSet(columns)).Omit("*").UpdateColumns(map[string]interface{}{})
 	return ResultInfo{RowsAffected: result.RowsAffected, Error: result.Error}, result.Error
 }
 
 // UpdateColumns ...
 func (d *DO) UpdateColumns(value interface{}) (info ResultInfo, err error) {
-	result := d.db.Model(d.newResultPointer()).UpdateColumns(value)
+	tx := d.prepareTx()
+	result := tx.UpdateColumns(value)
 	return ResultInfo{RowsAffected: result.RowsAffected, Error: result.Error}, result.Error
+}
+
+// prepareTx returns a transaction with backfillData model if available
+func (d *DO) prepareTx() *gorm.DB {
+	tx := d.db
+	if d.backfillData != nil {
+		tx = tx.Model(d.backfillData)
+	}
+	return tx
 }
 
 // assignSet fetch all set
 func (d *DO) assignSet(exprs []field.AssignExpr) (set clause.Set) {
 	for _, expr := range exprs {
+		if expr == nil {
+			continue
+		}
 		column := clause.Column{Table: d.alias, Name: string(expr.ColumnName())}
 		switch e := expr.AssignExpr().(type) {
 		case clause.Expr:
@@ -781,47 +787,48 @@ func (d *DO) assignSet(exprs []field.AssignExpr) (set clause.Set) {
 // Delete ...
 func (d *DO) Delete(models ...interface{}) (info ResultInfo, err error) {
 	var result *gorm.DB
+	tx := d.prepareTx()
 	if len(models) == 0 || reflect.ValueOf(models[0]).Len() == 0 {
-		result = d.db.Model(d.newResultPointer()).Delete(reflect.New(d.modelType).Interface())
+		result = tx.Delete(reflect.New(d.modelType).Interface())
 	} else {
 		targets := reflect.MakeSlice(reflect.SliceOf(reflect.PtrTo(d.modelType)), 0, len(models))
 		value := reflect.ValueOf(models[0])
 		for i := 0; i < value.Len(); i++ {
 			targets = reflect.Append(targets, value.Index(i))
 		}
-		result = d.db.Delete(targets.Interface())
+		result = tx.Delete(targets.Interface())
 	}
 	return ResultInfo{RowsAffected: result.RowsAffected, Error: result.Error}, result.Error
 }
 
 // Count ...
 func (d *DO) Count() (count int64, err error) {
-	return count, d.db.Session(&gorm.Session{}).Model(d.newResultPointer()).Count(&count).Error
+	return count, d.db.Session(&gorm.Session{}).Count(&count).Error
 }
 
 // Row ...
 func (d *DO) Row() *sql.Row {
-	return d.db.Model(d.newResultPointer()).Row()
+	return d.db.Row()
 }
 
 // Rows ...
 func (d *DO) Rows() (*sql.Rows, error) {
-	return d.db.Model(d.newResultPointer()).Rows()
+	return d.db.Rows()
 }
 
 // Scan ...
 func (d *DO) Scan(dest interface{}) error {
-	return d.db.Model(d.newResultPointer()).Scan(dest).Error
+	return d.db.Scan(dest).Error
 }
 
 // Pluck ...
 func (d *DO) Pluck(column field.Expr, dest interface{}) error {
-	return d.db.Model(d.newResultPointer()).Pluck(column.ColumnName().String(), dest).Error
+	return d.db.Pluck(column.ColumnName().String(), dest).Error
 }
 
 // ScanRows ...
 func (d *DO) ScanRows(rows *sql.Rows, dest interface{}) error {
-	return d.db.Model(d.newResultPointer()).ScanRows(rows, dest)
+	return d.db.ScanRows(rows, dest)
 }
 
 // WithResult ...
