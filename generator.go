@@ -56,7 +56,7 @@ func NewGenerator(cfg Config) *Generator {
 		Config: cfg,
 		Data:   make(map[string]*genInfo),
 		models: make(map[string]*generate.QueryStructMeta),
-
+		Tmpl:   newTmpl(),
 		logger: log.Default(),
 	}
 }
